@@ -1,0 +1,10 @@
+{
+  "playground": true,
+  "docs": true,
+  "author": "komsenapati",
+  "tags": ["Extension"],
+  "pro": true,
+  "dependencies": {
+    "@tiptap/core": "^3.31.3"
+  }
+}

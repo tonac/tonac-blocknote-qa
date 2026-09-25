@@ -1,0 +1,71 @@
+import { afterEach, beforeAll, beforeEach } from "vite-plus/test";
+import { commands, page } from "vite-plus/test/browser";
+
+import { ensureTouchEmulation } from "./src/utils/ensureTouchEmulation.js";
+
+// Browser-mode setup. Unlike the jsdom `vitestSetup.ts`, we don't mock
+// ClipboardEvent/DragEvent/matchMedia here — the real browser provides them.
+// We only seed the `window.__TEST_OPTIONS` object that examples read from
+// (e.g. the AI example uses `mockID`), replacing the Playwright init script
+// that used to live in `src/setup/setupScript.ts`.
+
+// Size the test iframe to 1280x720. The playwright `contextOptions.viewport`
+// in vite.config.browser.ts sizes the OUTER browser window, but vitest renders
+// each test inside an iframe that defaults to a much smaller size (~333px wide
+// — narrow enough to wrap menus weirdly and skew screenshots). `page.viewport`
+// resizes that iframe. Run before all tests in the file so every test sees the
+// right size from the first render.
+beforeAll(async () => {
+  // On the android and ios instances the outer window is a 393x727 phone
+  // (provider contextOptions) — the iframe must match it exactly. A larger
+  // iframe gets scaled down by the harness's fit-to-window transform, so
+  // captures come out phone-*sized* but contain a shrunken desktop-width
+  // layout.
+  if (/android|iphone/i.test(navigator.userAgent)) {
+    await page.viewport(393, 727);
+  } else {
+    await page.viewport(1280, 720);
+  }
+
+  // Match the playground's editor framing so screenshots line up with what
+  // users see at https://www.blocknotejs.org/examples (max-width 731px,
+  // horizontally centred, slight top padding). Without this the editor
+  // stretches the full 1280px and snapshot baselines drift from production.
+  const style = document.createElement("style");
+  style.textContent = `.bn-container { max-width: 731px; margin: 0 auto; padding-top: 8px; }`;
+  document.head.appendChild(style);
+});
+
+// Chromium drops the context's touch emulation after any screenshot captured
+// beyond the viewport, which on this mobile context is every element
+// screenshot, and Playwright never re-arms it (microsoft/playwright#42607;
+// mechanism and repro in `src/utils/restoreTouchEmulation.ts`). Before every
+// test on the android instance: re-arm the emulation, then assert it actually
+// holds — the assert is what catches the deeper failure class where the
+// *mechanism* breaks (provider contextOptions silently ignored, a vitest
+// upgrade rewiring the provider, this very command regressing). No suite
+// needs to call `ensureTouchEmulation` itself.
+beforeEach(async () => {
+  if (/android/i.test(navigator.userAgent)) {
+    await (
+      commands as unknown as { restoreTouchEmulation(): Promise<void> }
+    ).restoreTouchEmulation();
+    ensureTouchEmulation();
+  }
+  // Playwright's WebKit emulation sets `(pointer: coarse)` and `ontouchstart`
+  // for `hasTouch` but leaves `navigator.maxTouchPoints` at 0, which
+  // `isTouchDevice()` requires; real iOS Safari reports 5. The one stub of
+  // the ios instance.
+  if (/iphone/i.test(navigator.userAgent) && navigator.maxTouchPoints === 0) {
+    Object.defineProperty(navigator, "maxTouchPoints", { value: 5 });
+    ensureTouchEmulation();
+  }
+});
+
+beforeEach(() => {
+  (window as Window & { __TEST_OPTIONS?: any }).__TEST_OPTIONS = {};
+});
+
+afterEach(() => {
+  delete (window as Window & { __TEST_OPTIONS?: any }).__TEST_OPTIONS;
+});

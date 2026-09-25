@@ -1,0 +1,9 @@
+{
+  "playground": true,
+  "docs": true,
+  "author": "nperez0111",
+  "tags": ["Basic"],
+  "dependencies": {
+    "@blocknote/code-block": "latest"
+  }
+}

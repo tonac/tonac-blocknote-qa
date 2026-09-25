@@ -1,0 +1,98 @@
+import {
+  BlockSchema,
+  blockHasType,
+  InlineContentSchema,
+  StyleSchema,
+} from "@blocknote/core";
+import {
+  useBlockNoteEditor,
+  useComponentsContext,
+  useDictionary,
+  usePortalElement,
+  useSelectedBlocks,
+} from "@blocknote/react";
+import { useCallback, useEffect, useState } from "react";
+
+import { RiImageEditFill } from "react-icons/ri";
+
+import { UppyFilePanel } from "./UppyFilePanel";
+
+// Copied with minor changes from:
+// https://github.com/TypeCellOS/BlockNote/blob/main/packages/react/src/components/FormattingToolbar/DefaultButtons/FileReplaceButton.tsx
+// Opens Uppy file panel instead of the default one.
+export const FileReplaceButton = () => {
+  const dict = useDictionary();
+  const Components = useComponentsContext()!;
+  // Portal necessary to properly show popover on mobile.
+  const editorPortalElement = usePortalElement();
+
+  const editor = useBlockNoteEditor<
+    BlockSchema,
+    InlineContentSchema,
+    StyleSchema
+  >();
+
+  const selectedBlocks = useSelectedBlocks(editor);
+
+  const [isOpen, setIsOpenState] = useState<boolean>(false);
+
+  // Return focus to the editor when closing, so on mobile the on-screen
+  // keyboard and formatting toolbar stay up instead of being dismissed as
+  // focus falls back to `<body>`.
+  const setIsOpen = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        editor.focus();
+      }
+      setIsOpenState(open);
+    },
+    [editor],
+  );
+
+  useEffect(() => {
+    setIsOpenState(false);
+  }, [selectedBlocks]);
+
+  const block = selectedBlocks.length === 1 ? selectedBlocks[0] : undefined;
+
+  if (
+    block === undefined ||
+    !blockHasType(block, editor, "file", { url: "string" }) ||
+    !editor.isEditable
+  ) {
+    return null;
+  }
+
+  return (
+    <Components.Generic.Popover.Root
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      position={"bottom"}
+      portalElement={editorPortalElement}
+    >
+      <Components.Generic.Popover.Trigger>
+        <Components.FormattingToolbar.Button
+          className={"bn-button"}
+          onClick={() => setIsOpen(!isOpen)}
+          isSelected={isOpen}
+          mainTooltip={
+            dict.formatting_toolbar.file_replace.tooltip[block.type] ||
+            dict.formatting_toolbar.file_replace.tooltip["file"]
+          }
+          label={
+            dict.formatting_toolbar.file_replace.tooltip[block.type] ||
+            dict.formatting_toolbar.file_replace.tooltip["file"]
+          }
+          icon={<RiImageEditFill />}
+        />
+      </Components.Generic.Popover.Trigger>
+      <Components.Generic.Popover.Content
+        className={"bn-popover-content bn-panel-popover"}
+        variant={"panel-popover"}
+      >
+        {/* Replaces default file panel with our Uppy one. */}
+        <UppyFilePanel blockId={block.id} />
+      </Components.Generic.Popover.Content>
+    </Components.Generic.Popover.Root>
+  );
+};
